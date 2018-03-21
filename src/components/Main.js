@@ -147,6 +147,7 @@ export default class Main extends React.Component {
         <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "40px"}}>
           <button className="btn btn-success btn-lg" onClick={() => this.toggleModal('New')}>Create New Document</button>
           <button className="btn btn-warning btn-lg" onClick={() => this.toggleModal('Existing')}>Add Existing Document</button>
+          <button className="btn btn-danger btn-lg" onClick={() => this.props.redirect('Login')}>Logout</button>
         </div>
 
         <Modal
@@ -231,12 +232,12 @@ export default class Main extends React.Component {
           ariaHideApp={false}
         >
           <div className="modal-header">
-            <h3 className="modal-title">Are you sure you want to delete this document?</h3>
+            <h3 className="modal-title">Are you sure you want to remove this document?</h3>
           </div>
           <div className="modal-body">
             <form style={{minWidth: "50%", margin: "0 auto"}}>
               <div className="form-group">
-                <h5>Only owner can delete document. Collborators can only unlink.</h5>
+                <h5>Only owner can delete document permanently. Collborators can only unlink.</h5>
               </div>
             </form>
           </div>
