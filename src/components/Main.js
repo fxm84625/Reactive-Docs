@@ -1,5 +1,4 @@
 import React from 'react';
-//import {Link, Route, BrowserRouter as Router} from 'react-router-dom';
 import moment from 'moment';
 import Modal from 'react-modal';
 
@@ -252,7 +251,7 @@ export default class Main extends React.Component {
 
             <a key={i} href="#" className="list-group-item flex-column align-items-start"
             style={{borderRadius: "10px", marginBottom: "10px", border: "1px solid black", display: 'flex'}}>
-              <div style={{minWidth: "80%", maxWidth: "80%", display: 'flex'}} onClick={(e) => this.props.redirect("Document", doc._id)}>
+              <div style={{minWidth: "80%", maxWidth: "80%", display: 'flex'}} onClick={(e) => this.props.redirect("Document", doc._id, doc.title)}>
                 <div style={{display: 'flex', alignItems: "center"}}>
                   <img src="https://cdn2.iconfinder.com/data/icons/social-media-8/128/note3.png" height="100px" width="100px"/>
                 </div>
