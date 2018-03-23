@@ -7,3 +7,22 @@
 .align-left {
     text-align: left;
 }
+.background-transparent {
+    background-color: transparent;
+}
+.background-ff9999 {
+   background-color: #ff9999
+}
+.background-ff9933 {
+   background-color: #ff9933
+}
+.background-99ff66 {
+   background-color: #99ff66
+}
+.background-99ffcc {
+   background-color: #99ffcc
+}
+.background-cc99ff {
+   background-color: #cc99ff
+
+}

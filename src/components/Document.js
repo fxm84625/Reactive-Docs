@@ -1,11 +1,15 @@
 import React from 'react';
-import {ContentState, EditorState, RichUtils, getDefaultKeyBinding, convertToRaw, convertFromRaw} from 'draft-js'
+import {ContentState, EditorState, RichUtils, getDefaultKeyBinding, convertToRaw, convertFromRaw} from 'draft-js';
+import SelectionState from './SelectionState.js';
 import Editor, { createEditorStateWithText } from 'draft-js-plugins-editor';
 import createUndoPlugin from 'draft-js-undo-plugin';
 import createCounterPlugin from 'draft-js-counter-plugin';
 //import createEmojiPlugin from 'draft-js-emoji-plugin';
 import ColorPicker, { colorPickerPlugin } from 'draft-js-color-picker';
 import io from 'socket.io-client';
+import History from './History';
+import Modal from 'react-modal';
+import moment from 'moment';
 
 //import { stateToHTML } from 'draft-js-export-html';
 //import styles from "../../node_modules/draft-js-emoji-plugin/lib/plugin.css";
@@ -30,7 +34,10 @@ const styleMap = {
   'LOWERCASE': {
     textTransform: 'lowercase',
   },
-  // pink
+  'TRANSPARENT':  {
+    background: 'none'
+  },
+  //pink
   'HIGHLIGHT#ff9999': {
     backgroundColor: '#ff9999'
   },
@@ -49,7 +56,10 @@ const styleMap = {
   // purple
   'HIGHLIGHT#cc99ff': {
     backgroundColor: '#cc99ff'
-  }
+  },
+  // 'HIGHLIGHT': {
+  //   backgroundColor: "red"
+  // }
 }
 
 const getBlockStyle = (block) => {
@@ -60,6 +70,18 @@ const getBlockStyle = (block) => {
             return 'align-center';
         case 'right':
             return 'align-right';
+        // case 'transparent':
+        //     return 'background-transparent';
+        // case 'HIGHLIGHT#ff9999': 
+        //     return 'background-ff9999';
+        // case 'HIGHLIGHT#ff9933': 
+        //     return 'background-ff9933';
+        // case 'HIGHLIGHT#99ff66': 
+        //     return 'background-99ff66';
+        // case 'HIGHLIGHT#99ffcc': 
+        //     return 'background-99ffcc';
+        // case 'HIGHLIGHT#cc99ff': 
+        //     return 'background-cc99ff';
         default:
             return null;
     }   
@@ -83,45 +105,87 @@ const presetColors = [
   '#FFFFFF',
 ];
 
+function setHighLightColor (color) {
+  styleMap.HIGHLIGHT.backgroundColor = color
+}
+
 export default class Document extends React.Component {
   constructor(props){
     super(props)
-    this.state = {userId: localStorage.getItem('userId'), editorState: null};
+    this.state = {userId: localStorage.getItem('userId'), username: localStorage.getItem('username'), editorState: null, showHistory: false,  modalHistoryIsOn: false};
 
     this.socket = io( "https://reactive-docs.herokuapp.com/" );
     
-    this.isSelection = (editorState) => {
+    this.isHighlighted = (editorState) => {
       const selection = editorState.getSelection();
-      console.log('Selection', selection)
+      // console.log('Selection', selection)
       const start = selection.getStartOffset();
-      console.log('Start', start)
+      // console.log('Start', start)
       const end = selection.getEndOffset();
-      console.log('End', end)
+      // console.log('End', end)
       return start !== end;
     };
 
     this.onChange = (editorState) => {
+      // var currentSelection = editorState.getSelection();
+      // // console.log(currentSelection.serialize());
 
+      // this.selectionObj[ this.color ] = currentSelection;
 
-      editorState = RichUtils.toggleInlineStyle(editorState, 'HIGHLIGHT' + this.color);
+      // // Handle each User's selection highlights
+      // for( var color in this.selectionObj ) {
+      //   var userSelection = SelectionState.createWithObj( this.selectionObj[ color ] );
+      //   // if( !this.isHighlighted( editorState ) ) {
+      //     if( this.prevSelectionObj[ color ] ) {
+      //       var prevSelection = SelectionState.createWithObj( this.prevSelectionObj[ color ] );
+      //       editorState = EditorState.forceSelection(editorState, prevSelection );
+      //       editorState = RichUtils.toggleInlineStyle(editorState, 'TRANSPARENT');
+      //     }
+      //     else {
+      //       this.prevSelectionObj[ color ] = this.selectionObj[ color ];
+      //     }
+      //   // } else {
+      //     editorState = EditorState.forceSelection(editorState, userSelection );
+      //     editorState = RichUtils.toggleInlineStyle(editorState, 'HIGHLIGHT' + color);
+      //   // }
+      // }
+      // this.prevSelectionObj[ this.color ] = editorState.getSelection();
 
+      //Handle User's current selection highlight
+     
+        // if (!this.isHighlighted(editorState)) {
+        //   editorState = EditorState.forceSelection(editorState, this.lastSelect);
+        //   editorState = RichUtils.toggleInlineStyle(editorState, 'TRANSPARENT');
+        //   editorState = EditorState.forceSelection(editorState, currentSelection);
+        // } else {
+        //   editorState = EditorState.forceSelection(editorState, currentSelection);
+        if (this.isHighlighted(editorState)) editorState = RichUtils.toggleInlineStyle(editorState, 'HIGHLIGHT' + this.color);
+        //}
+    
+      // this.lastSelect = editorState.getSelection();
+      // if( !this.selectionObj ) this.selectionObj = {};
+      // this.selectionObj[ this.color ] = this.lastSelect;
+
+      // Save EditorState, then send an update event the server
       this.setState({editorState}, () => {
         if( this.editorToken ) { this.editorToken = false; return; }
-        const selection = editorState.getSelection();
         var dataObj = {
           content: convertToRaw(this.state.editorState.getCurrentContent()),
           token: this.state.userId,
           docId: this.props.docId,
           userColor: this.color,
-          selection: convertToRaw(selection)
+          selectionObj: this.selectionObj,
+          prevSelectionObj: this.prevSelectionObj
         }
         this.socket.emit('editDoc', dataObj );
       });
-    // this.handleKeyCommand = this.handleKeyCommand.bind(this)
+     //this.handleKeyCommand = this.handleKeyCommand.bind(this)
     }
 
     this.getEditorState = () => this.state.editorState;
     this.picker = colorPickerPlugin(this.onChange, this.getEditorState);
+    this.historyEditorState = null;
+    this.docHistoryInfo = {title: null, saveTime: null, username: null}
 
   }
 
@@ -133,6 +197,8 @@ export default class Document extends React.Component {
         return;
       }
       this.color = ack.color;
+      // this.selectionObj = ack.selectionObj || {};
+      // this.prevSelectionObj = ack.prevSelectionObj || {};
       if(typeof ack.content !== 'string') {
         this.setState({
           editorState:EditorState.createWithContent(convertFromRaw(ack.content))
@@ -145,7 +211,7 @@ export default class Document extends React.Component {
             if (res.document.content.length === 0)  {
               this.setState({editorState: EditorState.createEmpty()})
             } else {
-              let rawContent = res.document.content[0];
+              let rawContent = res.document.content[ res.document.content.length - 1 ].editorState;
               let contentState = convertFromRaw(rawContent);
               this.setState({
                 editorState: EditorState.createWithContent(contentState)
@@ -159,23 +225,26 @@ export default class Document extends React.Component {
     })
 
     this.socket.on('updateDoc', (data) => {
-      const { content, token } = data
+      const { content, token, selectionObj, prevSelectionObj } = data
       if( String(this.state.userId) === String(token) ) return;
       this.editorToken = true;
-      this.setState({ editorState:EditorState.createWithContent(convertFromRaw(content)) })
+      let newContent = EditorState.createWithContent(convertFromRaw(content));
+      // this.selectionObj = selectionObj || {};
+      // this.prevSelectionObj = prevSelectionObj || {};
+      this.setState({ editorState: newContent });
     })
   }
 
   saveDocument() {
-    var convertedContent = [ convertToRaw(this.state.editorState.getCurrentContent() ) ];
+    var convertedContent = convertToRaw(this.state.editorState.getCurrentContent() );
     fetch("https://reactive-docs.herokuapp.com/doc/" + this.props.docId, {
       method: 'POST',
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "userId": this.state.userId,
-        "content": convertedContent
+        "username": this.state.username,
+        "content": convertedContent,
       }),
     })
     .then(res => res.json())
@@ -215,8 +284,27 @@ export default class Document extends React.Component {
     )
   }
 
+  toggleDocumentHistory(e) {
+    e.preventDefault();
+    this.showHistory = !this.showHistory;
+  }
+
   componentWillUnmount() {
-    this.socket.off('updateDoc')
+    this.socket.emit('closeDoc', {docId: this.props.docId, userColor: this.color});
+    this.socket.off('updateDoc');
+  }
+
+  openModal(historyObj) {
+    let {saveTime, username, title} = historyObj;
+    this.docHistoryInfo = {saveTime, username, title};
+    this.historyEditorState = EditorState.createWithContent(convertFromRaw(historyObj.editorState));
+    this.setState({modalHistoryIsOn: true});
+  } 
+
+  closeModal() {
+    this.setState({modalHistoryIsOn: false});
+    this.historyEditorState = null;
+    this.docHistoryInfo = {};
   }
 
 //rendering function
@@ -229,10 +317,20 @@ export default class Document extends React.Component {
       const { editorState } = this.state;
       const inlineStyles = this.picker.exporter(editorState);
       //const html = stateToHTML(this.state.editorState.getCurrentContent(), { inlineStyles });
-
+      const customStyles = {
+        content : {
+          top                   : '50%',
+          left                  : '50%',
+          right                 : 'auto',
+          bottom                : 'auto',
+          marginRight           : '-50%',
+          transform             : 'translate(-50%, -50%)'
+        }
+      };
       return (
         <div className = "container">
           <h3 style={{textAlign: 'center', color: 'indigo', marginBottom: '20px'}}>Document Title: {this.props.docTitle}</h3>
+          <h5 style={{textAlign: 'center', color: 'blue', marginBottom: '20px'}}>ID: {this.props.docId}</h5>
           <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "20px"}}>
             <button className="btn btn-success" onClick={() => this.saveDocument()}>Save</button>
             <button className="btn btn-warning" onClick={() => {this.props.redirect('Main')}}>View All Documents</button>
@@ -288,8 +386,44 @@ export default class Document extends React.Component {
                 plugins={[undoPlugin, counterPlugin]}/>
                 
             </div>
-            <div style={{float: 'right'}}><CharCounter /> characters | <WordCounter /> words | <LineCounter /> lines</div>
+            <div style={{display: 'block'}}><CharCounter /> characters | <WordCounter /> words | <LineCounter /> lines</div>
           </div>
+
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: "20px"}}>
+            <button className='btn btn-secondary' 
+                    onClick={() => this.setState({showHistory: !this.state.showHistory})}
+                    style={{maxWidth: '200px', marginBottom: "20px"}}>View History</button>
+            {this.state.showHistory ? <History docId={this.props.docId} openModal={this.openModal.bind(this)}/> : null }
+          </div>
+
+          <Modal
+            isOpen={this.state.modalHistoryIsOn}
+            style={customStyles}
+            contentLabel="Document History"
+            ariaHideApp={false}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">{this.docHistoryInfo.title}</h3>
+            </div>
+            <div className="modal-body">
+              <form style={{minWidth: "50%", margin: "0 auto"}}>
+                <div className="form-group">
+                  <Editor
+                    customStyleMap={styleMap}
+                    blockStyleFn={getBlockStyle}
+                    customStyleFn={this.picker.customStyleFn}
+                    editorState={this.historyEditorState}
+                    onChange={null}
+                    readOnly={true}
+                    />
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <div>Saved on {moment(new Date(this.docHistoryInfo.saveTime), 'YYYY-MM-DDThh:mm:ss.SSSZ').format("dddd, M/D/YYYY, h:mm:ss a")} by {this.docHistoryInfo.username}</div>
+              <button type="button" className="btn btn-secondary" onClick={() => this.closeModal()}>Close</button>
+            </div>
+          </Modal>
         </div>
       )
     }
