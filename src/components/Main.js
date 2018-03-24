@@ -1,6 +1,20 @@
 import React from 'react';
 import moment from 'moment';
 import Modal from 'react-modal';
+import createToolbarPlugin, { Separator } from 'draft-js-static-toolbar-plugin';
+import {
+  ItalicButton,
+  BoldButton,
+  UnderlineButton,
+  CodeButton,
+  HeadlineOneButton,
+  HeadlineTwoButton,
+  HeadlineThreeButton,
+  UnorderedListButton,
+  OrderedListButton,
+  BlockquoteButton,
+  CodeBlockButton,
+} from 'draft-js-buttons';
 
 export default class Main extends React.Component {
   constructor(props) {

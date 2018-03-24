@@ -1,22 +1,15 @@
 import React from 'react';
-import {ContentState, EditorState, RichUtils, getDefaultKeyBinding, convertToRaw, convertFromRaw} from 'draft-js';
+import {ContentState, EditorState, RichUtils, getDefaultKeyBinding, convertToRaw, convertFromRaw, Modifier, KeyBindingUtil} from 'draft-js';
 import SelectionState from './SelectionState.js';
 import Editor, { createEditorStateWithText } from 'draft-js-plugins-editor';
 import createUndoPlugin from 'draft-js-undo-plugin';
 import createCounterPlugin from 'draft-js-counter-plugin';
-//import createEmojiPlugin from 'draft-js-emoji-plugin';
+// import createEmojiPlugin from 'draft-js-emoji-plugin';
 import ColorPicker, { colorPickerPlugin } from 'draft-js-color-picker';
 import io from 'socket.io-client';
 import History from './History';
 import Modal from 'react-modal';
 import moment from 'moment';
-
-//import { stateToHTML } from 'draft-js-export-html';
-//import styles from "../../node_modules/draft-js-emoji-plugin/lib/plugin.css";
-
-// const positionSuggestions = ({ state, props }) => {
-//   return {};
-// };
 
 const undoPlugin = createUndoPlugin();
 const { UndoButton, RedoButton } = undoPlugin;
@@ -24,8 +17,10 @@ const { UndoButton, RedoButton } = undoPlugin;
 const counterPlugin = createCounterPlugin();
 const { CharCounter, WordCounter, LineCounter } = counterPlugin;
 
-// const emojiPlugin = createEmojiPlugin({useNativeArt: true, positionSuggestions: positionSuggestions});
-// const { EmojiSuggestions, EmojiSelect } = emojiPlugin;
+//const emojiPlugin = createEmojiPlugin({useNativeArt: true});
+//const { EmojiSuggestions, EmojiSelect } = emojiPlugin;
+
+const {hasCommandModifier} = KeyBindingUtil;
 
 const styleMap = {
   'UPPERCASE': {
@@ -34,33 +29,41 @@ const styleMap = {
   'LOWERCASE': {
     textTransform: 'lowercase',
   },
-  'TRANSPARENT':  {
-    background: 'none'
+  'SUBSCRIPT': { 
+    fontSize: '0.6em',
+    verticalAlign: 'sub' 
   },
-  //pink
-  'HIGHLIGHT#ff9999': {
-    backgroundColor: '#ff9999'
-  },
-  // orange
-  'HIGHLIGHT#ff9933': {
-    backgroundColor: '#ff9933'
-  },
-  // green
-  'HIGHLIGHT#99ff66': {
-    backgroundColor: '#99ff66'
-  },
-  // blue
-  'HIGHLIGHT#99ffcc': {
-    backgroundColor: '#99ffcc'
-  },
-  // purple
-  'HIGHLIGHT#cc99ff': {
-    backgroundColor: '#cc99ff'
-  },
-  // 'HIGHLIGHT': {
-  //   backgroundColor: "red"
-  // }
+  'SUPERSCRIPT': { 
+    fontSize: '0.6em', 
+    verticalAlign: 'super' 
+  }
 }
+
+var userColorArray = [ '#ff9999', '#ff9933', '#99ff66', '#99ffcc', '#cc99ff' ];
+                    // pink,      orange,    green,     blue,      purple
+userColorArray.forEach( color => {
+  styleMap[ "HIGHLIGHT"+color ] = {
+    backgroundColor: color
+  }
+  styleMap[ "CURSOR"+color ] = {
+    borderRight: "5px solid "+color
+  }
+});
+
+var fontSizeArray = [8,10,12,14,16,18,20,24,28,32,36,48,72];
+fontSizeArray.forEach( fontSize => {
+  styleMap[ "FONT-SIZE-"+fontSize ] = {
+    fontSize: fontSize+'px'
+  };
+});
+
+var fontFamilyArray = ['Arial', 'Helvetica', 'Tahoma', 'Lucida Sans Unicode', 'Times New Roman', 'Courier New','Palatino', 'Garamond', 'Bookman', 'Verdana', 'Georgia', 'Comic Sans MS', 'Trebuchet MS', 'Impact'];
+
+fontFamilyArray.forEach(font => {
+  styleMap["FONT-FAMILY-"+font] = {
+    fontFamily: font
+  }
+})
 
 const getBlockStyle = (block) => {
     switch (block.getType()) {
@@ -70,18 +73,6 @@ const getBlockStyle = (block) => {
             return 'align-center';
         case 'right':
             return 'align-right';
-        // case 'transparent':
-        //     return 'background-transparent';
-        // case 'HIGHLIGHT#ff9999': 
-        //     return 'background-ff9999';
-        // case 'HIGHLIGHT#ff9933': 
-        //     return 'background-ff9933';
-        // case 'HIGHLIGHT#99ff66': 
-        //     return 'background-99ff66';
-        // case 'HIGHLIGHT#99ffcc': 
-        //     return 'background-99ffcc';
-        // case 'HIGHLIGHT#cc99ff': 
-        //     return 'background-cc99ff';
         default:
             return null;
     }   
@@ -105,66 +96,61 @@ const presetColors = [
   '#FFFFFF',
 ];
 
-function setHighLightColor (color) {
-  styleMap.HIGHLIGHT.backgroundColor = color
+// function editorIsHighlighted( editorState ) {
+//   const selection = editorState.getSelection();
+//   const start = selection.getStartOffset();
+//   const end = selection.getEndOffset();
+//   return start !== end;
+// };
+function selectionIsHighlighted( selectionState ) {
+  const start = selectionState.getStartOffset();
+  const end = selectionState.getEndOffset();
+  return start !== end;
+}
+
+function myKeyBindingFn(e) {
+  return getDefaultKeyBinding(e);
 }
 
 export default class Document extends React.Component {
   constructor(props){
     super(props)
-    this.state = {userId: localStorage.getItem('userId'), username: localStorage.getItem('username'), editorState: null, showHistory: false,  modalHistoryIsOn: false};
-
-    this.socket = io( "https://reactive-docs.herokuapp.com/" );
-    
-    this.isHighlighted = (editorState) => {
-      const selection = editorState.getSelection();
-      // console.log('Selection', selection)
-      const start = selection.getStartOffset();
-      // console.log('Start', start)
-      const end = selection.getEndOffset();
-      // console.log('End', end)
-      return start !== end;
+    this.state = {
+      userId: localStorage.getItem('userId'),
+      username: localStorage.getItem('username'),
+      editorState: null,
+      showHistory: false,
+      modalHistoryIsOn: false,
+      title: this.props.docTitle,
+      titleFocus: false
     };
 
+    this.socket = io( "https://reactive-docs.herokuapp.com/" );
+
     this.onChange = (editorState) => {
-      // var currentSelection = editorState.getSelection();
-      // // console.log(currentSelection.serialize());
+      let currentContent = editorState.getCurrentContent()
+      const currentSelection = editorState.getSelection()
+      const firstBlock = currentContent.getFirstBlock()
+      const lastBlock = currentContent.getLastBlock()
+      const allSelection = SelectionState.createEmpty(firstBlock.getKey()).merge({
+        focusKey: lastBlock.getKey(),
+        focusOffset: lastBlock.getLength(),
+      })
 
-      // this.selectionObj[ this.color ] = currentSelection;
+      this.selectionObj[ this.color ] = currentSelection;
 
-      // // Handle each User's selection highlights
-      // for( var color in this.selectionObj ) {
-      //   var userSelection = SelectionState.createWithObj( this.selectionObj[ color ] );
-      //   // if( !this.isHighlighted( editorState ) ) {
-      //     if( this.prevSelectionObj[ color ] ) {
-      //       var prevSelection = SelectionState.createWithObj( this.prevSelectionObj[ color ] );
-      //       editorState = EditorState.forceSelection(editorState, prevSelection );
-      //       editorState = RichUtils.toggleInlineStyle(editorState, 'TRANSPARENT');
-      //     }
-      //     else {
-      //       this.prevSelectionObj[ color ] = this.selectionObj[ color ];
-      //     }
-      //   // } else {
-      //     editorState = EditorState.forceSelection(editorState, userSelection );
-      //     editorState = RichUtils.toggleInlineStyle(editorState, 'HIGHLIGHT' + color);
-      //   // }
-      // }
-      // this.prevSelectionObj[ this.color ] = editorState.getSelection();
+      for( var color in this.selectionObj ) {
+        // Clear all Highlighs for the entire document for each User's color
+        var userSelection = SelectionState.createWithObj( this.selectionObj[ color ] );
+        currentContent = Modifier.removeInlineStyle(currentContent, allSelection, 'HIGHLIGHT'+color);
+        //currentContent = Modifier.removeInlineStyle(currentContent, allSelection, 'CURSOR'+color);
+        // Highlight the User's selection with their Highlight Color
+        if( selectionIsHighlighted( userSelection ) ) currentContent = Modifier.applyInlineStyle(currentContent, userSelection, 'HIGHLIGHT'+color);
+        //else currentContent = Modifier.applyInlineStyle(currentContent, userSelection, 'CURSOR'+color);
+        editorState = EditorState.createWithContent(currentContent);
+      }
 
-      //Handle User's current selection highlight
-     
-        // if (!this.isHighlighted(editorState)) {
-        //   editorState = EditorState.forceSelection(editorState, this.lastSelect);
-        //   editorState = RichUtils.toggleInlineStyle(editorState, 'TRANSPARENT');
-        //   editorState = EditorState.forceSelection(editorState, currentSelection);
-        // } else {
-        //   editorState = EditorState.forceSelection(editorState, currentSelection);
-        if (this.isHighlighted(editorState)) editorState = RichUtils.toggleInlineStyle(editorState, 'HIGHLIGHT' + this.color);
-        //}
-    
-      // this.lastSelect = editorState.getSelection();
-      // if( !this.selectionObj ) this.selectionObj = {};
-      // this.selectionObj[ this.color ] = this.lastSelect;
+      if( !this.state.titleFocus ) editorState = EditorState.forceSelection(editorState, currentSelection)
 
       // Save EditorState, then send an update event the server
       this.setState({editorState}, () => {
@@ -175,11 +161,11 @@ export default class Document extends React.Component {
           docId: this.props.docId,
           userColor: this.color,
           selectionObj: this.selectionObj,
-          prevSelectionObj: this.prevSelectionObj
+          title: this.state.title,
         }
         this.socket.emit('editDoc', dataObj );
       });
-     //this.handleKeyCommand = this.handleKeyCommand.bind(this)
+     this.handleKeyCommand = this.handleKeyCommand.bind(this)
     }
 
     this.getEditorState = () => this.state.editorState;
@@ -190,6 +176,7 @@ export default class Document extends React.Component {
   }
 
   componentDidMount() {
+
     this.socket.emit('openDoc', {docId: this.props.docId, userId: this.state.userId}, (ack) => {
       if(!ack) console.error('Error joining document!')
       if( ack.error ) {
@@ -197,8 +184,7 @@ export default class Document extends React.Component {
         return;
       }
       this.color = ack.color;
-      // this.selectionObj = ack.selectionObj || {};
-      // this.prevSelectionObj = ack.prevSelectionObj || {};
+      this.selectionObj = ack.selectionObj || {};
       if(typeof ack.content !== 'string') {
         this.setState({
           editorState:EditorState.createWithContent(convertFromRaw(ack.content))
@@ -225,14 +211,38 @@ export default class Document extends React.Component {
     })
 
     this.socket.on('updateDoc', (data) => {
-      const { content, token, selectionObj, prevSelectionObj } = data
+      const { content, token, selectionObj, title} = data
       if( String(this.state.userId) === String(token) ) return;
       this.editorToken = true;
       let newContent = EditorState.createWithContent(convertFromRaw(content));
-      // this.selectionObj = selectionObj || {};
-      // this.prevSelectionObj = prevSelectionObj || {};
-      this.setState({ editorState: newContent });
+      this.selectionObj = selectionObj || {};
+      this.setState({ editorState: newContent, title });
     })
+
+    this.socket.on( 'updateTitle', data => {
+      const { title } = data;
+      this.setState({ title });
+    });
+
+    this.socket.on( 'autosave', () => {
+      var convertedContent = convertToRaw(this.state.editorState.getCurrentContent() );
+      fetch("https://reactive-docs.herokuapp.com/doc/autosave/" + this.props.docId, {
+        method: 'POST',
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "content": convertedContent,
+          "title": this.state.title
+        }),
+      })
+      .then(res => res.json())
+      .then(res => {
+        if (!res.success) {
+          alert(res.error)
+        }
+      })
+    });
   }
 
   saveDocument() {
@@ -245,6 +255,7 @@ export default class Document extends React.Component {
       body: JSON.stringify({
         "username": this.state.username,
         "content": convertedContent,
+        "title": this.state.title
       }),
     })
     .then(res => res.json())
@@ -255,14 +266,14 @@ export default class Document extends React.Component {
     })
   }
 
-  // handleKeyCommand(command, editorState) {
-  //     const newState = RichUtils.handleKeyCommand(editorState, command);
-  //     if (newState) {
-  //       this.onChange(newState);
-  //       return true;
-  //     }
-  //     return false;
-  //   }
+  handleKeyCommand(command, editorState) {
+      const newState = RichUtils.handleKeyCommand(editorState, command);
+      if (newState) {
+        this.onChange(newState);
+        return true;
+      }
+      return false;
+    }
 
   toggleBlockType(e, blockType){
     e.preventDefault();
@@ -307,6 +318,16 @@ export default class Document extends React.Component {
     this.docHistoryInfo = {};
   }
 
+  onTitleChange(e) {
+    e.preventDefault();
+    this.setState({title: e.target.value});
+    var dataObj = {
+      docId: this.props.docId,
+      title: this.state.title,
+    }
+    this.socket.emit('editTitle', dataObj );
+  }
+
 //rendering function
   render(){
     if (this.state.editorState === null) {
@@ -329,68 +350,88 @@ export default class Document extends React.Component {
       };
       return (
         <div className = "container">
-          <h3 style={{textAlign: 'center', color: 'indigo', marginBottom: '20px'}}>Document Title: {this.props.docTitle}</h3>
+          <div style={{display: 'flex', justifyContent: 'center'}}>
+            <input type='text' style={{marginTop: '15px', borderRadius: '5px', textAlign: 'center', color: 'indigo', fontSize: '32px', marginBottom: '20px'}} 
+                   onBlur={(e) => this.setState({titleFocus: false})}
+                   onClick={(e) => this.setState({titleFocus: true})}
+                   onChange={(e) => this.onTitleChange(e)} value={this.state.title} />
+          </div>
+
           <h5 style={{textAlign: 'center', color: 'blue', marginBottom: '20px'}}>ID: {this.props.docId}</h5>
+
           <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "20px"}}>
             <button className="btn btn-success" onClick={() => this.saveDocument()}>Save</button>
+            <button className="btn btn-danger" onClick={() => this.setState({editorState: EditorState.push(this.state.editorState, ContentState.createFromText(''))})}>CLEAR ALL</button>
             <button className="btn btn-warning" onClick={() => {this.props.redirect('Main')}}>View All Documents</button>
           </div>
-          <div>
-            <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "20px"}}>
-              <button className="btn" onMouseDown={(e) => this.toggleInlineStyle(e, 'BOLD')}>BOLD</button>
-              <button className="btn" onMouseDown={(e) => this.toggleInlineStyle(e, 'ITALIC')}>Italicize</button>
-              <button className="btn" onMouseDown={(e) => this.toggleInlineStyle(e, 'UNDERLINE')}>Underline</button>
-              <button className="btn" onMouseDown={(e) => this.toggleInlineStyle(e, 'STRIKETHROUGH')}>Strikethrough</button>
 
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'unordered-list-item')}>UL</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'ordered-list-item')}>OL</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'blockquote')}>Quote</button>
+          <div className='textContainer' style={{border: 'solid 1px black', padding: "0 20px", minHeight: "500px"}} onClick={this.state.editorState.focus}>
+            <div id="toolbar" style={{display: 'flex', justifyContent: 'flex-start', marginBottom: "20px", borderBottom: '1px solid black', flexWrap: "wrap"}}>
+              <div className="dropdown">
+                <button className="btn btn-default" style={{minHeight: '100%'}}>Font  <span className="caret"></span></button>
+                <div className="dropdown-content">
+                {fontFamilyArray.map(font => (
+                  <a href="#" onClick={(e) => this.toggleInlineStyle(e, 'FONT-FAMILY-' + font)} style={{padding: '5px'}}>{font}</a>
+                  ))}
+                </div>
+              </div>
 
-              <UndoButton className="btn"/>
-              <RedoButton className="btn"/>
+              <div className="dropdown">
+                <button className="btn btn-default" style={{minHeight: '100%'}}>Font Size  <span className="caret"></span></button>
+                <div className="dropdown-content">
+                {fontSizeArray.map(size => (
+                  <a href="#" onClick={(e) => this.toggleInlineStyle(e, 'FONT-SIZE-' + size)} style={{padding: '5px'}}>{size}</a>
+                  ))}
+                </div>
+              </div>
+              <div className="btn btn-default" style={{ display: 'flex', alignItems: 'center', height: "100%" }}>
+                <ColorPicker
+                  toggleColor={color => this.picker.addColor(color)}
+                  presetColors={presetColors}
+                  color={this.picker.currentColor(editorState)}
+                />
+              </div>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'BOLD')}><span style={{fontWeight: 'bold'}}>B</span></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'ITALIC')}><span style={{fontStyle: 'italic'}}>I</span></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'UNDERLINE')}><span style={{textDecoration: 'underline'}}>U</span></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'STRIKETHROUGH')}><span style={{textDecoration: 'line-through'}}>ABC</span></button>
 
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'UPPERCASE')}>ABC</button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'LOWERCASE')}>xyz</button>
+
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'SUPERSCRIPT')}>X<span style={{verticalAlign: 'sub'}}>2</span></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleInlineStyle(e, 'SUBSCRIPT')}>X<span style={{verticalAlign: 'super'}}>2</span></button>
+
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'unordered-list-item')}><i className="fa fa-list-ul" style={{fontSize:"20px"}}></i></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'ordered-list-item')}><i className="fa fa-list-ol" style={{fontSize: "20px"}}></i></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'blockquote')}><i className="fa fa-quote-right" style={{fontSize: "20px"}}></i></button>
+
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'left')}><span className="glyphicon glyphicon-align-left"></span></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'center')}><span className="glyphicon glyphicon-align-center"></span></button>
+              <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'right')}><span className="glyphicon glyphicon-align-right"></span></button>
+
+              <UndoButton className="btn btn-default"/>
+              <RedoButton className="btn btn-default"/>
             </div>
-            <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "20px"}}>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'header-one')}>H1</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'header-two')}>H2</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'header-three')}>H3</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'header-four')}>H4</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'header-five')}>H5</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'header-six')}>H6</button>
 
-              <button className="btn" onMouseDown={(e) => this.toggleInlineStyle(e, 'UPPERCASE')}>UPPERCASE</button>
-              <button className="btn" onMouseDown={(e) => this.toggleInlineStyle(e, 'LOWERCASE')}>lowercase</button>
+            <Editor
+              customStyleMap={styleMap}
+              blockStyleFn={getBlockStyle}
+              customStyleFn={this.picker.customStyleFn}
+              editorState={this.state.editorState}
+              onChange={(editorState) => this.onChange(editorState)}
+              plugins={[undoPlugin, counterPlugin]}
+              handleKeyCommand={this.handleKeyCommand} 
+              keyBindingFn={myKeyBindingFn}
+            />
+          </div>
 
-              <ColorPicker
-                toggleColor={color => this.picker.addColor(color)}
-                presetColors={presetColors}
-                color={this.picker.currentColor(editorState)}
-              />
-              <button onClick={this.picker.removeColor}>clear</button>
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "20px"}}>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'left')}>LEFT</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'center')}>CENTER</button>
-              <button className="btn" onMouseDown={(e) => this.toggleBlockType(e, 'right')}>RIGHT</button>
-            </div>
-
-            <div className='textContainer' style={{border: 'solid 1px black', borderRadius: '10px', padding: "20px 20px", minHeight: "500px"}}>
-              <Editor
-                customStyleMap={styleMap}
-                blockStyleFn={getBlockStyle}
-                customStyleFn={this.picker.customStyleFn}
-                editorState={this.state.editorState}
-                onChange={(editorState) => this.onChange(editorState)}
-                readOnly={this.state.readOnly}
-                plugins={[undoPlugin, counterPlugin]}/>
-                
-            </div>
-            <div style={{display: 'block'}}><CharCounter /> characters | <WordCounter /> words | <LineCounter /> lines</div>
+          <div style={{display: 'flex', justifyContent: 'flex-end'}}>
+            <div><CharCounter /> characters | <WordCounter /> words | <LineCounter /> lines</div>
           </div>
 
           <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: "20px"}}>
-            <button className='btn btn-secondary' 
+            <button className='btn btn-primary' 
                     onClick={() => this.setState({showHistory: !this.state.showHistory})}
                     style={{maxWidth: '200px', marginBottom: "20px"}}>View History</button>
             {this.state.showHistory ? <History docId={this.props.docId} openModal={this.openModal.bind(this)}/> : null }
@@ -413,14 +454,13 @@ export default class Document extends React.Component {
                     blockStyleFn={getBlockStyle}
                     customStyleFn={this.picker.customStyleFn}
                     editorState={this.historyEditorState}
-                    onChange={null}
-                    readOnly={true}
-                    />
+                    onChange={() => {}}
+                    readOnly={true} />
                 </div>
               </form>
             </div>
             <div className="modal-footer">
-              <div>Saved on {moment(new Date(this.docHistoryInfo.saveTime), 'YYYY-MM-DDThh:mm:ss.SSSZ').format("dddd, M/D/YYYY, h:mm:ss a")} by {this.docHistoryInfo.username}</div>
+              <div style={{marginBottom: '20px'}}>Saved on {moment(new Date(this.docHistoryInfo.saveTime), 'YYYY-MM-DDThh:mm:ss.SSSZ').format("dddd, M/D/YYYY, h:mm:ss a")} { this.docHistoryInfo.username ? "by " + this.docHistoryInfo.username : ''}</div>
               <button type="button" className="btn btn-secondary" onClick={() => this.closeModal()}>Close</button>
             </div>
           </Modal>

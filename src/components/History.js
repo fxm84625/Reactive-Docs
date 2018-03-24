@@ -16,7 +16,11 @@ export default class History extends React.Component {
       if (!res.success) {
         alert(res.error)
       } else {
-        this.setState({history: res.document.content.reverse()})
+
+        this.setState({
+          autosave: res.document.autosave,
+          history: res.document.content.reverse()
+        })
       }
     })
   }
@@ -27,6 +31,15 @@ export default class History extends React.Component {
     } else {
       return (
         <div className="list-group"  style={{display: 'flex', justifyContent: 'center', flexDirection: 'column', maxWidth: "50%", margin: "0 auto"}}>
+        {
+          this.state.autosave ? (<div onClick={() => this.props.openModal(this.state.autosave)}
+              className="list-group-item flex-column align-items-start"
+            style={{borderRadius: "10px", marginBottom: "10px", border: "1px solid black", display: 'flex', flexDirection: 'column'}}> 
+              <div><span style={{color: 'red'}}>Last Autosave:</span></div>
+              <div><span style={{textDecoration: 'underline'}}>Title</span>: <span style={{fontWeight: 'bold', color: 'green'}}>{this.state.autosave.title}</span></div>
+              <div>Saved on <span style={{fontStyle: 'italic'}}>{moment(new Date(this.state.autosave.saveTime), 'YYYY-MM-DDThh:mm:ss.SSSZ').format("dddd, M/D/YYYY, h:mm:ss a")}</span></div>
+            </div>) : null
+        }
         {
           this.state.history.map( ( historyObj, i ) => 
             (<div key={i} onClick={() => this.props.openModal(historyObj)}
