@@ -1,7 +1,20 @@
 import React from 'react';
-//import {Link, Route, BrowserRouter as Router} from 'react-router-dom';
 import moment from 'moment';
 import Modal from 'react-modal';
+import createToolbarPlugin, { Separator } from 'draft-js-static-toolbar-plugin';
+import {
+  ItalicButton,
+  BoldButton,
+  UnderlineButton,
+  CodeButton,
+  HeadlineOneButton,
+  HeadlineTwoButton,
+  HeadlineThreeButton,
+  UnorderedListButton,
+  OrderedListButton,
+  BlockquoteButton,
+  CodeBlockButton,
+} from 'draft-js-buttons';
 
 export default class Main extends React.Component {
   constructor(props) {
@@ -147,6 +160,7 @@ export default class Main extends React.Component {
         <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "40px"}}>
           <button className="btn btn-success btn-lg" onClick={() => this.toggleModal('New')}>Create New Document</button>
           <button className="btn btn-warning btn-lg" onClick={() => this.toggleModal('Existing')}>Add Existing Document</button>
+          <button className="btn btn-danger btn-lg" onClick={() => this.props.redirect('Login')}>Logout</button>
         </div>
 
         <Modal
@@ -231,12 +245,12 @@ export default class Main extends React.Component {
           ariaHideApp={false}
         >
           <div className="modal-header">
-            <h3 className="modal-title">Are you sure you want to delete this document?</h3>
+            <h3 className="modal-title">Are you sure you want to remove this document?</h3>
           </div>
           <div className="modal-body">
             <form style={{minWidth: "50%", margin: "0 auto"}}>
               <div className="form-group">
-                <h5>Only owner can delete document. Collborators can only unlink.</h5>
+                <h5>Only owner can delete document permanently. Collborators can only unlink.</h5>
               </div>
             </form>
           </div>
@@ -251,7 +265,7 @@ export default class Main extends React.Component {
 
             <a key={i} href="#" className="list-group-item flex-column align-items-start"
             style={{borderRadius: "10px", marginBottom: "10px", border: "1px solid black", display: 'flex'}}>
-              <div style={{minWidth: "80%", maxWidth: "80%", display: 'flex'}} onClick={(e) => this.props.redirect("Document", doc._id)}>
+              <div style={{minWidth: "80%", maxWidth: "80%", display: 'flex'}} onClick={(e) => this.props.redirect("Document", doc._id, doc.title)}>
                 <div style={{display: 'flex', alignItems: "center"}}>
                   <img src="https://cdn2.iconfinder.com/data/icons/social-media-8/128/note3.png" height="100px" width="100px"/>
                 </div>
