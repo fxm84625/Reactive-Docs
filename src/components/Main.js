@@ -1,20 +1,6 @@
 import React from 'react';
 import moment from 'moment';
 import Modal from 'react-modal';
-import createToolbarPlugin, { Separator } from 'draft-js-static-toolbar-plugin';
-import {
-  ItalicButton,
-  BoldButton,
-  UnderlineButton,
-  CodeButton,
-  HeadlineOneButton,
-  HeadlineTwoButton,
-  HeadlineThreeButton,
-  UnorderedListButton,
-  OrderedListButton,
-  BlockquoteButton,
-  CodeBlockButton,
-} from 'draft-js-buttons';
 
 export default class Main extends React.Component {
   constructor(props) {
@@ -30,6 +16,7 @@ export default class Main extends React.Component {
     this.toggleModal = this.toggleModal.bind(this);
   }
 
+  // open and close modals
   toggleModal(str) {
     if (str === "New") {
       this.setState({modalNewIsOpen: !this.state.modalNewIsOpen})
@@ -40,9 +27,9 @@ export default class Main extends React.Component {
     } else if (str === 'Delete') {
       this.setState({modalDeleteIsOpen: !this.state.modalDeleteIsOpen})
     }
-
   }
 
+  // query all documents user owns & has permission to collaborate on
   componentWillMount() {
     fetch("https://reactive-docs.herokuapp.com/user/" + this.state.userId)
     .then(res => res.json())
@@ -55,6 +42,7 @@ export default class Main extends React.Component {
     })
   }
 
+  // create a new document in the database
   createDocument(e, title, docPass) {
     e.preventDefault();
     if (!docPass) {
@@ -75,17 +63,19 @@ export default class Main extends React.Component {
     .then(res => res.json())
     .then(res => {
       if (res.success) {
-        //alert('Successfully created new document!');
+        // clear the new document's title and password saved in the state
         this.setState({docTitle: '', docPass: ''});
+        // get updated list of documents
         this.componentWillMount();
+        // close modal
         this.toggleModal('New');
-        //this.props.redirect('Document', res.documentId);
       } else {
         alert(res.error)
       }
     })
   }
 
+  // add another user's document
   addExistingDocument(e, id, docPass) {
     e.preventDefault();
     if (!docPass) {
@@ -106,11 +96,12 @@ export default class Main extends React.Component {
     .then(res => res.json())
     .then(res => {
       if (res.success) {
-        //alert('Successfully linked to document!');
+        // clear docId and docPass stored in state
         this.setState({docId: '', docPass: ''});
+        // get updated list of documents
         this.componentWillMount();
+        // close modal
         this.toggleModal('Existing');
-        //this.props.redirect('Document', res.documentId);
       } else {
         alert(res.error)
       }
@@ -131,14 +122,22 @@ export default class Main extends React.Component {
     .then(res => res.json())
     .then(res => {
       if (res.success) {
+        // clear docId
         this.setState({docId: ''});
+        // get updated list of document
         this.componentWillMount();
+        // close modal
         this.toggleModal('Delete');
-        //this.props.redirect('Document', res.documentId);
       } else {
         alert(res.error)
       }
     })
+  }
+
+  logout() {
+    localStorage.setItem('userId', '');
+    localStorage.setItem('username', '');
+    this.props.redirect('Login');
   }
 
   render() {
@@ -160,7 +159,7 @@ export default class Main extends React.Component {
         <div style={{display: 'flex', justifyContent: 'space-around', marginBottom: "40px"}}>
           <button className="btn btn-success btn-lg" onClick={() => this.toggleModal('New')}>Create New Document</button>
           <button className="btn btn-warning btn-lg" onClick={() => this.toggleModal('Existing')}>Add Existing Document</button>
-          <button className="btn btn-danger btn-lg" onClick={() => this.props.redirect('Login')}>Logout</button>
+          <button className="btn btn-danger btn-lg" onClick={() => this.logout()}>Logout</button>
         </div>
 
         <Modal

@@ -1,27 +1,18 @@
 import React from 'react';
-import {ContentState, EditorState, RichUtils, getDefaultKeyBinding, convertToRaw, convertFromRaw, Modifier, KeyBindingUtil} from 'draft-js';
+import {ContentState, EditorState, RichUtils, convertToRaw, convertFromRaw, Modifier} from 'draft-js';
 import SelectionState from './SelectionState.js';
 import Editor, { createEditorStateWithText } from 'draft-js-plugins-editor';
-import createUndoPlugin from 'draft-js-undo-plugin';
 import createCounterPlugin from 'draft-js-counter-plugin';
-// import createEmojiPlugin from 'draft-js-emoji-plugin';
 import ColorPicker, { colorPickerPlugin } from 'draft-js-color-picker';
 import io from 'socket.io-client';
 import History from './History';
 import Modal from 'react-modal';
 import moment from 'moment';
 
-const undoPlugin = createUndoPlugin();
-const { UndoButton, RedoButton } = undoPlugin;
-
 const counterPlugin = createCounterPlugin();
 const { CharCounter, WordCounter, LineCounter } = counterPlugin;
 
-//const emojiPlugin = createEmojiPlugin({useNativeArt: true});
-//const { EmojiSuggestions, EmojiSelect } = emojiPlugin;
-
-const {hasCommandModifier} = KeyBindingUtil;
-
+// custom inline styles
 const styleMap = {
   'UPPERCASE': {
     textTransform: 'uppercase',
@@ -39,8 +30,9 @@ const styleMap = {
   }
 }
 
+// keeping track of multiple users via different highlight colors
 var userColorArray = [ '#ff9999', '#ff9933', '#99ff66', '#99ffcc', '#cc99ff' ];
-                    // pink,      orange,    green,     blue,      purple
+                       // pink,      orange,    green,     blue,      purple
 userColorArray.forEach( color => {
   styleMap[ "HIGHLIGHT"+color ] = {
     backgroundColor: color
@@ -58,24 +50,24 @@ fontSizeArray.forEach( fontSize => {
 });
 
 var fontFamilyArray = ['Arial', 'Helvetica', 'Tahoma', 'Lucida Sans Unicode', 'Times New Roman', 'Courier New','Palatino', 'Garamond', 'Bookman', 'Verdana', 'Georgia', 'Comic Sans MS', 'Trebuchet MS', 'Impact'];
-
 fontFamilyArray.forEach(font => {
   styleMap["FONT-FAMILY-"+font] = {
     fontFamily: font
   }
 })
 
+// custom block styles
 const getBlockStyle = (block) => {
-    switch (block.getType()) {
-        case 'left':
-            return 'align-left';
-        case 'center':
-            return 'align-center';
-        case 'right':
-            return 'align-right';
-        default:
-            return null;
-    }   
+  switch (block.getType()) {
+    case 'left':
+      return 'align-left';
+    case 'center':
+      return 'align-center';
+    case 'right':
+      return 'align-right';
+    default:
+      return null;
+  }
 }
 
 const presetColors = [
@@ -102,14 +94,11 @@ const presetColors = [
 //   const end = selection.getEndOffset();
 //   return start !== end;
 // };
+
 function selectionIsHighlighted( selectionState ) {
   const start = selectionState.getStartOffset();
   const end = selectionState.getEndOffset();
   return start !== end;
-}
-
-function myKeyBindingFn(e) {
-  return getDefaultKeyBinding(e);
 }
 
 export default class Document extends React.Component {
@@ -125,8 +114,10 @@ export default class Document extends React.Component {
       titleFocus: false
     };
 
+    // allowing multiple users collaboration
     this.socket = io( "https://reactive-docs.herokuapp.com/" );
 
+    // update editorState whenever editor changes (including selection)
     this.onChange = (editorState) => {
       let currentContent = editorState.getCurrentContent()
       const currentSelection = editorState.getSelection()
@@ -137,8 +128,8 @@ export default class Document extends React.Component {
         focusOffset: lastBlock.getLength(),
       })
 
+      // each active user gets assigned one color when selecting text in the editor
       this.selectionObj[ this.color ] = currentSelection;
-
       for( var color in this.selectionObj ) {
         // Clear all Highlighs for the entire document for each User's color
         var userSelection = SelectionState.createWithObj( this.selectionObj[ color ] );
@@ -150,9 +141,10 @@ export default class Document extends React.Component {
         editorState = EditorState.createWithContent(currentContent);
       }
 
+      // focus on editor if user is not focusing on title field
       if( !this.state.titleFocus ) editorState = EditorState.forceSelection(editorState, currentSelection)
 
-      // Save EditorState, then send an update event the server
+      // save EditorState, then send an update event the server
       this.setState({editorState}, () => {
         if( this.editorToken ) { this.editorToken = false; return; }
         var dataObj = {
@@ -165,7 +157,6 @@ export default class Document extends React.Component {
         }
         this.socket.emit('editDoc', dataObj );
       });
-     this.handleKeyCommand = this.handleKeyCommand.bind(this)
     }
 
     this.getEditorState = () => this.state.editorState;
@@ -175,8 +166,9 @@ export default class Document extends React.Component {
 
   }
 
+  // listen for events from and signaling event to server 
   componentDidMount() {
-
+    // signaling to server current user is begining to edit document
     this.socket.emit('openDoc', {docId: this.props.docId, userId: this.state.userId}, (ack) => {
       if(!ack) console.error('Error joining document!')
       if( ack.error ) {
@@ -185,18 +177,23 @@ export default class Document extends React.Component {
       }
       this.color = ack.color;
       this.selectionObj = ack.selectionObj || {};
+
+      // if another user is editing the document, server sends the latest editorState
       if(typeof ack.content !== 'string') {
         this.setState({
           editorState:EditorState.createWithContent(convertFromRaw(ack.content))
         })
       } else {
+        // if no one else is editing the document, query the last saved version of the document from database
         fetch("https://reactive-docs.herokuapp.com/doc/" + this.props.docId)
         .then(res => res.json())
         .then(res => {
           if (res.success) {
+            // loads a blank document if there's no history 
             if (res.document.content.length === 0)  {
               this.setState({editorState: EditorState.createEmpty()})
             } else {
+              // loads latest saved version of document
               let rawContent = res.document.content[ res.document.content.length - 1 ].editorState;
               let contentState = convertFromRaw(rawContent);
               this.setState({
@@ -210,6 +207,7 @@ export default class Document extends React.Component {
       }
     })
 
+    // updates current user's editorState when another user edits document
     this.socket.on('updateDoc', (data) => {
       const { content, token, selectionObj, title} = data
       if( String(this.state.userId) === String(token) ) return;
@@ -219,11 +217,13 @@ export default class Document extends React.Component {
       this.setState({ editorState: newContent, title });
     })
 
+    // updates the document title on current user's view when another user updates document title
     this.socket.on( 'updateTitle', data => {
       const { title } = data;
       this.setState({ title });
     });
 
+    // server indicates one user to autosave every 30 seconds (behind the scene)
     this.socket.on( 'autosave', () => {
       var convertedContent = convertToRaw(this.state.editorState.getCurrentContent() );
       fetch("https://reactive-docs.herokuapp.com/doc/autosave/" + this.props.docId, {
@@ -245,6 +245,7 @@ export default class Document extends React.Component {
     });
   }
 
+  // manually saving a document / adding a new version in document history
   saveDocument() {
     var convertedContent = convertToRaw(this.state.editorState.getCurrentContent() );
     fetch("https://reactive-docs.herokuapp.com/doc/" + this.props.docId, {
@@ -266,15 +267,6 @@ export default class Document extends React.Component {
     })
   }
 
-  handleKeyCommand(command, editorState) {
-      const newState = RichUtils.handleKeyCommand(editorState, command);
-      if (newState) {
-        this.onChange(newState);
-        return true;
-      }
-      return false;
-    }
-
   toggleBlockType(e, blockType){
     e.preventDefault();
     this.onChange(
@@ -295,16 +287,19 @@ export default class Document extends React.Component {
     )
   }
 
+  // show/hide document history
   toggleDocumentHistory(e) {
     e.preventDefault();
     this.showHistory = !this.showHistory;
   }
 
+  // exit document
   componentWillUnmount() {
     this.socket.emit('closeDoc', {docId: this.props.docId, userColor: this.color});
     this.socket.off('updateDoc');
   }
 
+  // open modal to view a specific previous version of document
   openModal(historyObj) {
     let {saveTime, username, title} = historyObj;
     this.docHistoryInfo = {saveTime, username, title};
@@ -318,6 +313,7 @@ export default class Document extends React.Component {
     this.docHistoryInfo = {};
   }
 
+  // updates document title on current user's view (without saving) and signals the server
   onTitleChange(e) {
     e.preventDefault();
     this.setState({title: e.target.value});
@@ -409,9 +405,6 @@ export default class Document extends React.Component {
               <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'left')}><span className="glyphicon glyphicon-align-left"></span></button>
               <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'center')}><span className="glyphicon glyphicon-align-center"></span></button>
               <button className="btn btn-default" onMouseDown={(e) => this.toggleBlockType(e, 'right')}><span className="glyphicon glyphicon-align-right"></span></button>
-
-              <UndoButton className="btn btn-default"/>
-              <RedoButton className="btn btn-default"/>
             </div>
 
             <Editor
@@ -420,9 +413,7 @@ export default class Document extends React.Component {
               customStyleFn={this.picker.customStyleFn}
               editorState={this.state.editorState}
               onChange={(editorState) => this.onChange(editorState)}
-              plugins={[undoPlugin, counterPlugin]}
-              handleKeyCommand={this.handleKeyCommand} 
-              keyBindingFn={myKeyBindingFn}
+              plugins={[counterPlugin]}
             />
           </div>
 

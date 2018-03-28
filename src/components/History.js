@@ -1,7 +1,5 @@
 import React from 'react';
 import moment from 'moment';
-import Modal from 'react-modal';
-import {Editor, EditorState, convertFromRaw} from 'draft-js';
 
 export default class History extends React.Component {
   constructor(props) {
@@ -9,6 +7,7 @@ export default class History extends React.Component {
     this.state={history: null}
   }
 
+  // get all previously saved versions of document, including latest autosave
   componentWillMount() {
     fetch("https://reactive-docs.herokuapp.com/doc/" + this.props.docId)
     .then(res => res.json())
@@ -25,6 +24,7 @@ export default class History extends React.Component {
     })
   }
 
+  // render a list of versions with the latest autosave always on top 
   render() {
     if (this.state.history === null) {
       return <div>Loading...</div>

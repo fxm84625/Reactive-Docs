@@ -3,7 +3,7 @@ import React from 'react';
 export default class Login extends React.Component {
   constructor(props) {
     super(props);
-    this.state={username: 'brian', password: '123456'}
+    this.state={username: '', password: ''}
   }
 
   login(e, username, password) {
@@ -21,8 +21,10 @@ export default class Login extends React.Component {
     .then(res => res.json())
     .then(res => {
       if (res.success) {
+        //storing the userId and username for future use
         localStorage.setItem('userId', res.userId);
         localStorage.setItem('username', username);
+        //go to main page with list of documents (if any)
         this.props.redirect('Main')
       } else {
         alert(res.error)

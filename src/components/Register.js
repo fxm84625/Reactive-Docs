@@ -21,7 +21,7 @@ export default class Register extends React.Component {
     .then(res => res.json())
     .then(res => {
       if (res.success) {
-        alert('Successfully registered!');
+        //redirect to Login page if user successfully registered
         this.props.redirect('Login');
       } else {
         alert(res.error)

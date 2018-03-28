@@ -19,14 +19,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import {AppContainer} from 'react-hot-loader';
-import MuiThemeProvider from 'material-ui/styles/MuiThemeProvider';
-import { Router } from 'react-router';
-import createBrowserHistory from 'history/createBrowserHistory';
-const history = createBrowserHistory();
 
 const render = () => {
   const App = require('./app').default;
-  ReactDOM.render(<AppContainer><MuiThemeProvider><Router history={history}><App/></Router></MuiThemeProvider></AppContainer>, document.getElementById('App'));
+  ReactDOM.render(<AppContainer><App/></AppContainer>, document.getElementById('App'));
 }
 
 render();
