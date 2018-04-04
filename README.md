@@ -14,4 +14,4 @@
 
 ## Purpose
 - To create a collaborative Text Editor that has real-time change detection
-- To create a simple App that doesn't eat up memory like Google Docs (since it runs on Chrome)
+- To create a simple App that doesn't eat up memory like Chrome does for Google Docs
