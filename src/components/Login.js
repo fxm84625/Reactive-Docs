@@ -35,7 +35,7 @@ export default class Login extends React.Component {
   render() {
     return (
       <div style={{display: 'flex', justifyContent: 'center', flexDirection: 'column'}}>
-        <h1 style={{textAlign: 'center', color: 'blue', marginBottom: '100px'}}>Welcome to Doodle Docz!</h1>
+        <h1 style={{textAlign: 'center', color: 'blue', marginBottom: '100px'}}>Welcome to Reactive Docs!</h1>
         <form style={{minWidth: "50%", margin: "0 auto"}}>
           <div className="form-group">
             <label>Username: </label>

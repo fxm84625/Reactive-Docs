@@ -1,6 +1,6 @@
 {
-  "name": "DOODLE-DOCZ",
-  "productName": "DOODLE-DOCZ",
+  "name": "Reactive-Docs",
+  "productName": "Reactive-Docs",
   "version": "1.0.0",
   "description": "Reactive Docs",
   "main": "src/index.js",
