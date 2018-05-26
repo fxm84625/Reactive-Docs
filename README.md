@@ -15,3 +15,6 @@
 ## Purpose
 - To create a collaborative Text Editor that has real-time change detection
 - To create a simple App that doesn't eat up memory like Chrome does for Google Docs
+
+![](img/collaborative1.gif)
+![](img/collaborative2.gif)
